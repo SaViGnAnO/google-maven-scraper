@@ -8,10 +8,8 @@ using System.Xml.Serialization;
 
 namespace ScrapeTheRepo.Structs
 {
-    [XmlRoot]
-    public struct MasterIndex
+    public class MasterIndex
     {
-        [XmlArray("metadata")]
-        public List<GroupId> GroupIds;
+        public List<string>? GroupIds;
     }
 }

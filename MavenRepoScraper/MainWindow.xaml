@@ -6,7 +6,18 @@
         xmlns:local="clr-namespace:MavenRepoScraper"
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
-    <Grid>
+    <Grid Margin="0,0,400,0">
+        <ListView x:Name="ArtifactList">
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <WrapPanel>
+                        <CheckBox IsChecked="{Binding IsChecked}" />
+                        <TextBlock Text="{Binding GroupName}" />
+                        <TextBlock Text="{Binding ArtifactName}" FontWeight="Bold" />
+                    </WrapPanel>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
 
     </Grid>
 </Window>

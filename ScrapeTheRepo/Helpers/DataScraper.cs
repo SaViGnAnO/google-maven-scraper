@@ -4,13 +4,16 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+using static Newtonsoft.Json.JsonConvert;
 using PuppeteerSharp;
 using System.Xml;
 using ScrapeTheRepo.Interfaces;
 using System.Net.Http;
 using System.Xml.Serialization;
 using ScrapeTheRepo.Structs;
+using ScrapeTheRepo.Enums;
+using ScrapeTheRepo.Extensions;
+using Newtonsoft.Json;
 
 namespace ScrapeTheRepo.Helpers
 {
@@ -20,11 +23,13 @@ namespace ScrapeTheRepo.Helpers
         private Page _page;
         private IRepository _repository;
         private HttpClient _client;
+        private Group _groupIndex;
+        private BrowserFetcher _fetcher;
 
         public DataScraper(IRepository repository, bool isHeadless)
         {
-            var browseFetcher = new BrowserFetcher(new BrowserFetcherOptions());
-            var revisionInfo = browseFetcher.DownloadAsync(BrowserFetcher.DefaultChromiumRevision).GetAwaiter().GetResult();
+            _fetcher = new BrowserFetcher(new BrowserFetcherOptions());
+            var revisionInfo = GetBrowserRevision().GetAwaiter().GetResult();
 
             _browser = Puppeteer.LaunchAsync(new LaunchOptions { Headless = isHeadless, ExecutablePath = revisionInfo.ExecutablePath }).GetAwaiter().GetResult();
             _page = _browser.NewPageAsync().GetAwaiter().GetResult();
@@ -32,16 +37,30 @@ namespace ScrapeTheRepo.Helpers
             _client = new HttpClient();
         }
 
+        public async Task<RevisionInfo> GetBrowserRevision()
+        {
+            return await _fetcher.DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
+        }
+
         public async Task<MasterIndex> GetMasterIndex()
         {
-            MasterIndex masterIndex;
+            List<string>? masterIndexGroups;
 
             try
             {
-                var xmlResponse = await _client.GetStreamAsync($"{_repository.BaseUrl}{_repository.MasterIndexPath}");
-                var serializer = new XmlSerializer(typeof(MasterIndex));
+                var xmlResponse = await _client.GetStringAsync($"{_repository.BaseUrl}{_repository.MasterIndexPath}");
+                var xmlDocument = new XmlDocument();
+                xmlDocument.LoadXml(xmlResponse);
 
-                masterIndex = (MasterIndex)serializer.Deserialize(xmlResponse)!;
+                //remove me
+                masterIndexGroups = new List<string>();
+
+                var metadataNode = xmlDocument.SelectSingleNode("metadata");
+
+                foreach(XmlNode node in metadataNode!.ChildNodes)
+                {
+                    masterIndexGroups.Add(node.Name);
+                }
             }
             catch (Exception e)
             {
@@ -49,24 +68,62 @@ namespace ScrapeTheRepo.Helpers
                 throw;
             }
             
-            return masterIndex;
+            return new MasterIndex { GroupIds = masterIndexGroups! };
         }
 
-        public async Task<GroupIndex> GetGroupIndex(GroupId groupId)
+        public async Task<Group> GetGroupIndex(string groupId)
         {
-            var xmlResponse = await _client.GetStreamAsync($"{_repository.BaseUrl}{_repository.GroupIndexPath(groupId.Name)}");
-            var serializer = new XmlSerializer(typeof(GroupIndex));
+            var groupIndexUrl = $"{_repository.BaseUrl}{_repository.GroupIndexPath(groupId)}";
+            var xmlResponse = await _client.GetStringAsync(groupIndexUrl);
+            var xmlDocument = new XmlDocument();
+            xmlDocument.LoadXml(xmlResponse);
 
-            var groupIndex = (GroupIndex)serializer.Deserialize(xmlResponse)!;
+            var groupIndex = xmlDocument.SelectSingleNode(groupId);
+            List<Artifact> allVersions = new List<Artifact>();
 
-            return groupIndex!;
+            foreach(XmlNode node in groupIndex!.ChildNodes)
+            {
+                var versions = node.Attributes!["versions"]!.Value!.Split(',').ToList();
+                allVersions.Add(new Artifact
+                {
+                    GroupName = groupId,
+                    ArtifactName = node.Name,
+                    Versions = versions
+                });
+            }
+            _groupIndex = new Group { GroupName = groupId, ArtifactList = allVersions };
+            return _groupIndex;
         }
 
-        #region IDisposable
+        public async Task GetArtifactFiles(string groupId, string artifact, string version, string destinationPath)
+        {
+            var artifactUrlList = new List<string>();
+            var fileExtList = new List<string>()
+            {
+                ".pom",
+                ".module",
+                ".aar",
+                "-sources.jar",
+                "-javadoc.jar"
+            };
 
-        /// <inheritdoc />
+            foreach(var fileExt in fileExtList)
+            {
+                try
+                {
+                    var url = $"{_repository.BaseUrl}{groupId.Replace('.', '/')}/{artifact}/{version}/{artifact}-{version}{fileExt}";
+                    Console.WriteLine(url);
+                    var fileBytes = await _client.GetByteArrayAsync(url);
+
+                    Directory.CreateDirectory($"{destinationPath}{artifact}\\{version}\\");
+                    await File.WriteAllBytesAsync($"{destinationPath}{artifact}\\{version}\\{artifact}-{version}{fileExt}", fileBytes);
+                } catch (HttpRequestException e)
+                {
+                    Console.WriteLine(e.Message);
+                }
+            }
+        }
+
         public async Task Close() => await _browser.CloseAsync();
-
-        #endregion
     }
 }

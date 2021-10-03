@@ -18,6 +18,8 @@ namespace ScrapeTheRepo.Repositories
 
         public string MasterIndexPath => "master-index.xml";
 
-        public string GroupIndexPath(string groupId) => $"{groupId.Replace('.', '/')}";
+        public string GroupIndexPath(string groupId) => $"{groupId.Replace('.', '/')}/group-index.xml";
+
+        public string ArtifactPath(string groupId, string version) => $"{BaseUrl}{groupId}/{version}";
     }
 }

@@ -7,19 +7,8 @@ using System.Xml.Serialization;
 
 namespace ScrapeTheRepo.Structs
 {
-    public struct Group
-    {
-        [XmlAttribute("Name")]
-        public string Name { get; set; }
-    }
-
-    public struct GroupId
-    {
-        [XmlAttribute("Name")]
-        public string Name { get; set; }
-    }
-
-    public struct GroupIndex {
-
+    public struct Group {
+        public string GroupName {  get; set; }
+        public List<Artifact> ArtifactList {  get; set; }
     }
 }

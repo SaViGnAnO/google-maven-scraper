@@ -17,5 +17,6 @@ namespace ScrapeTheRepo.Interfaces
         string BaseUrl { get; }
         string MasterIndexPath { get; }
         string GroupIndexPath(string groupId);
+        string ArtifactPath(string groupId, string version);
     }
 }
